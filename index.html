@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Relationship Web</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; }
+  h1 { text-align: center; padding: 14px; font-size: 18px; font-weight: 500; color: #ccc; letter-spacing: 1px; }
+  #controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 10px; align-items: center; background: #16213e; border-bottom: 1px solid #2a2a4a; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aaa; cursor: pointer; padding: 4px 10px; border-radius: 8px; border: 1px solid #2a2a4a; user-select: none; background: #1a1a2e; transition: opacity 0.2s; }
+  .legend-item:hover { background: #2a2a4a; }
+  .legend-item.off { opacity: 0.3; }
+  .legend-line { width: 20px; height: 3px; border-radius: 2px; }
+  #search-box { padding: 5px 10px; border-radius: 8px; border: 1px solid #2a2a4a; background: #16213e; color: #eee; font-size: 13px; width: 150px; }
+  #search-box::placeholder { color: #555; }
+  #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+  svg { display: block; width: 100%; height: 100%; }
+  #info-panel { position: absolute; top: 12px; right: 12px; background: #16213e; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px 14px; font-size: 12px; min-width: 170px; max-width: 230px; display: none; z-index: 10; }
+  #info-panel h3 { margin: 0 0 8px; font-size: 15px; font-weight: 500; color: #eee; }
+  .info-rel { margin: 4px 0; }
+  .info-rel span { font-weight: 600; }
+  #hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #444; pointer-events: none; }
+</style>
+</head>
+<body>
+<h1>Relationship Web</h1>
+<div id="controls">
+  <input id="search-box" type="text" placeholder="Search person..." oninput="doSearch(this.value)" />
+  <div class="legend-item" data-type="Married" onclick="toggleType('Married',this)"><div class="legend-line" style="background:#9b8fef;"></div> Married</div>
+  <div class="legend-item" data-type="Dating" onclick="toggleType('Dating',this)"><div class="legend-line" style="background:#3ecf8e; height:0; border-top: 2px dashed #3ecf8e;"></div> Dating</div>
+  <div class="legend-item" data-type="Sexual" onclick="toggleType('Sexual',this)"><div class="legend-line" style="background:#e06b8b;"></div> Sexual</div>
+  <div class="legend-item" data-type="Parent" onclick="toggleType('Parent',this)"><div class="legend-line" style="background:#e8a24a;"></div> Parent/Child</div>
+  <div class="legend-item" data-type="Sibling" onclick="toggleType('Sibling',this)"><div class="legend-line" style="background:#7a9bbf;"></div> Sibling</div>
+  <div class="legend-item" data-type="Aunt" onclick="toggleType('Aunt',this)"><div class="legend-line" style="background:#7a9bbf; height:0; border-top: 2px dotted #7a9bbf;"></div> Aunt</div>
+</div>
+<div id="canvas-wrap">
+  <svg id="svg"></svg>
+  <div id="info-panel"></div>
+  <div id="hint">click a person to highlight · drag to rearrange</div>
+</div>
+
+<script>
+const people = ["Anya","Aoife","Arcana","Arietta","Atlas","Aurora","Blaze","Brodie","Cadence","Calder","Damon","Dimitri","Eddie","Elyra","Enzo","Ever","Faezira","Fraser","Frey","Grim","Hector","Istrid","Izzek","Jhak","Kael","Kai'sa","Kit","Kolenya","Kreyth","Lara","Lorenzo","Maple","Markus","Meria","Misha","Neil","Oskar","Qiyana","Rae","Remiel","Sable","Sachi","Sage","Selune","Seren","Taenya","Talesin","Talon","Taverin","Vander","Vesper","Victoria","Viktor","Xayah"];
+
+const relationships = [
+  ["Anya","Grim","Sexual"],["Anya","Fraser","Sexual"],["Anya","Remiel","Sexual"],["Anya","Blaze","Dating"],["Anya","Dimitri","Sexual"],
+  ["Aoife","Viktor","Dating"],["Aoife","Faezira","Dating"],["Aoife","Talesin","Dating"],["Aoife","Hector","Dating"],["Aoife","Neil","Dating"],["Aoife","Izzek","Sexual"],
+  ["Arcana","Vesper","Sexual"],["Arcana","Misha","Sexual"],["Arcana","Damon","Dating"],["Arcana","Blaze","Dating"],["Arcana","Jhak","Sexual"],["Arcana","Atlas","Sexual"],
+  ["Arietta","Remiel","Sexual"],["Arietta","Fraser","Sexual"],
+  ["Atlas","Brodie","Sexual"],["Atlas","Taverin","Sexual"],["Atlas","Arcana","Sexual"],["Atlas","Faezira","Sexual"],["Atlas","Kolenya","Sexual"],["Atlas","Maple","Dating"],
+  ["Blaze","Arcana","Dating"],["Blaze","Anya","Dating"],["Blaze","Cadence","Dating"],["Blaze","Faezira","Dating"],["Blaze","Kolenya","Dating"],["Blaze","Taenya","Dating"],["Blaze","Maple","Sexual"],
+  ["Brodie","Atlas","Sexual"],["Brodie","Talon","Sexual"],["Brodie","Faezira","Dating"],["Brodie","Dimitri","Sexual"],
+  ["Cadence","Markus","Dating"],["Cadence","Remiel","Sexual"],
+  ["Damon","Vesper","Sexual"],["Damon","Rae","Dating"],["Damon","Arcana","Dating"],["Damon","Faezira","Dating"],["Damon","Eddie","Sexual"],["Damon","Frey","Sexual"],
+  ["Dimitri","Brodie","Sexual"],["Dimitri","Anya","Sexual"],["Dimitri","Kolenya","Sexual"],
+  ["Eddie","Hector","Sexual"],["Eddie","Viktor","Sexual"],["Eddie","Damon","Sexual"],["Eddie","Vesper","Sexual"],["Eddie","Taenya","Sexual"],
+  ["Elyra","Meria","Dating"],["Elyra","Vesper","Sexual"],
+  ["Enzo","Kai'sa","Dating"],["Enzo","Aurora","Dating"],
+  ["Ever","Xayah","Dating"],
+  ["Faezira","Aoife","Dating"],["Faezira","Atlas","Sexual"],["Faezira","Blaze","Dating"],["Faezira","Brodie","Dating"],["Faezira","Damon","Dating"],["Faezira","Talesin","Dating"],["Faezira","Taverin","Dating"],["Faezira","Meria","Dating"],["Faezira","Remiel","Sexual"],["Faezira","Grim","Sexual"],["Faezira","Fraser","Sexual"],["Faezira","Izzek","Dating"],
+  ["Fraser","Anya","Sexual"],["Fraser","Arietta","Sexual"],["Fraser","Faezira","Sexual"],["Fraser","Selune","Dating"],["Fraser","Kolenya","Dating"],
+  ["Frey","Maple","Sexual"],["Frey","Damon","Sexual"],["Frey","Jhak","Sexual"],
+  ["Grim","Anya","Sexual"],["Grim","Faezira","Sexual"],["Grim","Maple","Sexual"],["Grim","Kolenya","Dating"],["Grim","Kai'sa","Sexual"],
+  ["Hector","Aoife","Dating"],["Hector","Eddie","Sexual"],
+  ["Istrid","Markus","Dating"],
+  ["Izzek","Faezira","Dating"],["Izzek","Aoife","Sexual"],["Izzek","Talesin","Sexual"],
+  ["Jhak","Arcana","Sexual"],["Jhak","Kolenya","Sexual"],["Jhak","Frey","Sexual"],["Jhak","Sable","Dating"],
+  ["Kai'sa","Markus","Dating"],["Kai'sa","Grim","Sexual"],["Kai'sa","Enzo","Dating"],["Kai'sa","Sage","Dating"],
+  ["Kolenya","Atlas","Sexual"],["Kolenya","Blaze","Dating"],["Kolenya","Dimitri","Sexual"],["Kolenya","Fraser","Dating"],["Kolenya","Grim","Dating"],["Kolenya","Jhak","Sexual"],["Kolenya","Misha","Dating"],["Kolenya","Talon","Sexual"],["Kolenya","Sage","Sexual"],
+  ["Kreyth","Vander","Married"],
+  ["Lara","Oskar","Dating"],["Lara","Viktor","Dating"],
+  ["Lorenzo","Victoria","Married"],["Lorenzo","Remiel","Sexual"],["Lorenzo","Sachi","Sexual"],
+  ["Maple","Atlas","Dating"],["Maple","Frey","Sexual"],["Maple","Grim","Sexual"],["Maple","Blaze","Sexual"],
+  ["Markus","Cadence","Dating"],["Markus","Istrid","Dating"],["Markus","Kai'sa","Dating"],["Markus","Taverin","Dating"],
+  ["Meria","Taverin","Married"],["Meria","Elyra","Dating"],["Meria","Faezira","Dating"],["Meria","Sable","Dating"],
+  ["Misha","Arcana","Sexual"],["Misha","Selune","Dating"],["Misha","Kolenya","Dating"],
+  ["Neil","Rae","Dating"],["Neil","Seren","Dating"],["Neil","Aoife","Dating"],
+  ["Oskar","Lara","Dating"],
+  ["Rae","Damon","Dating"],["Rae","Neil","Dating"],["Rae","Viktor","Dating"],
+  ["Remiel","Arietta","Sexual"],["Remiel","Selune","Sexual"],["Remiel","Anya","Sexual"],["Remiel","Faezira","Sexual"],["Remiel","Cadence","Sexual"],["Remiel","Lorenzo","Sexual"],["Remiel","Victoria","Sexual"],["Remiel","Sachi","Dating"],
+  ["Sable","Jhak","Dating"],["Sable","Meria","Dating"],
+  ["Sachi","Remiel","Dating"],["Sachi","Talon","Dating"],["Sachi","Lorenzo","Sexual"],
+  ["Sage","Kai'sa","Dating"],["Sage","Kolenya","Sexual"],["Sage","Qiyana","Dating"],
+  ["Selune","Fraser","Dating"],["Selune","Misha","Dating"],["Selune","Remiel","Sexual"],
+  ["Seren","Neil","Dating"],
+  ["Taenya","Blaze","Dating"],["Taenya","Eddie","Sexual"],["Taenya","Talon","Sexual"],
+  ["Talesin","Aoife","Dating"],["Talesin","Faezira","Dating"],["Talesin","Izzek","Sexual"],
+  ["Talon","Brodie","Sexual"],["Talon","Sachi","Dating"],["Talon","Kolenya","Sexual"],["Talon","Taenya","Sexual"],
+  ["Taverin","Meria","Married"],["Taverin","Faezira","Dating"],["Taverin","Atlas","Sexual"],["Taverin","Markus","Dating"],
+  ["Vander","Kreyth","Married"],
+  ["Vesper","Arcana","Sexual"],["Vesper","Damon","Sexual"],["Vesper","Eddie","Sexual"],["Vesper","Elyra","Sexual"],
+  ["Victoria","Lorenzo","Married"],["Victoria","Remiel","Sexual"],
+  ["Viktor","Aoife","Dating"],["Viktor","Eddie","Sexual"],["Viktor","Lara","Dating"],["Viktor","Rae","Dating"],
+  ["Xayah","Ever","Dating"],
+  ["Victoria","Enzo","Parent"],["Lorenzo","Enzo","Parent"],
+  ["Oskar","Aoife","Parent"],
+  ["Kreyth","Faezira","Parent"],["Vander","Faezira","Parent"],
+  ["Frey","Istrid","Sibling"],["Frey","Oskar","Sibling"],["Istrid","Oskar","Sibling"],
+  ["Viktor","Victoria","Sibling"],
+  ["Elyra","Talesin","Sibling"],
+  ["Sable","Talon","Sibling"],
+  ["Meria","Taenya","Sibling"],
+  ["Izzek","Kai'sa","Sibling"],
+  ["Frey","Aoife","Aunt"],["Istrid","Aoife","Aunt"],
+];
+
+const typeColors = { Married:"#9b8fef", Dating:"#3ecf8e", Sexual:"#e06b8b", Parent:"#e8a24a", Sibling:"#7a9bbf", Aunt:"#7a9bbf" };
+const typeDash  = { Married:"none", Dating:"6,4", Sexual:"none", Parent:"none", Sibling:"3,3", Aunt:"2,6" };
+const typeWidth  = { Married:2.5, Dating:2, Sexual:1.5, Parent:2, Sibling:1.5, Aunt:1.5 };
+
+let activeTypes = new Set(["Married","Dating","Sexual","Parent","Sibling","Aunt"]);
+let highlighted = null;
+let nodes = {};
+let dragging = null, dragSVGX, dragSVGY;
+
+const svgEl = document.getElementById('svg');
+
+function getSVGSize() {
+  const r = svgEl.getBoundingClientRect();
+  return { W: r.width || 900, H: r.height || 700 };
+}
+
+function initNodes() {
+  const {W, H} = getSVGSize();
+  const n = people.length;
+  people.forEach((p, i) => {
+    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const r = Math.min(W, H) * 0.40;
+    nodes[p] = { x: W/2 + r * Math.cos(angle), y: H/2 + r * Math.sin(angle) };
+  });
+}
+
+function getConnections(name) {
+  return relationships.filter(r => r[0]===name||r[1]===name)
+    .map(r => ({ other: r[0]===name ? r[1] : r[0], type: r[2] }));
+}
+
+function render() {
+  const {W, H} = getSVGSize();
+  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svgEl.innerHTML = '';
+
+  const edgeG = document.createElementNS('http://www.w3.org/2000/svg','g');
+  const nodeG = document.createElementNS('http://www.w3.org/2000/svg','g');
+  svgEl.appendChild(edgeG);
+  svgEl.appendChild(nodeG);
+
+  const drawn = new Set();
+  relationships.forEach(([a,b,type]) => {
+    if (!activeTypes.has(type)) return;
+    const key = [a,b].sort().join('|')+'|'+type;
+    if (drawn.has(key)) return;
+    drawn.add(key);
+    const na = nodes[a], nb = nodes[b];
+    if (!na||!nb) return;
+    const isHlEdge = highlighted && (a===highlighted||b===highlighted);
+    const dimmed = highlighted && !isHlEdge;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',na.x); line.setAttribute('y1',na.y);
+    line.setAttribute('x2',nb.x); line.setAttribute('y2',nb.y);
+    line.setAttribute('stroke', typeColors[type]);
+    line.setAttribute('stroke-width', isHlEdge ? typeWidth[type]+1 : typeWidth[type]);
+    line.setAttribute('stroke-dasharray', typeDash[type]);
+    line.setAttribute('opacity', dimmed ? 0.05 : (highlighted ? 0.85 : 0.5));
+    edgeG.appendChild(line);
+  });
+
+  people.forEach(p => {
+    const nd = nodes[p];
+    const conns = getConnections(p);
+    const isHl = highlighted===p;
+    const isConn = highlighted && conns.some(c=>c.other===highlighted);
+    const dimmed = highlighted && !isHl && !isConn;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('cursor','pointer');
+    g.setAttribute('opacity', dimmed ? 0.15 : 1);
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx',nd.x); circle.setAttribute('cy',nd.y);
+    circle.setAttribute('r', isHl ? 15 : 12);
+    let fill = '#1e3a5f', stroke = '#3ecf8e';
+    if (isHl) { fill='#534AB7'; stroke='#9b8fef'; }
+    else if (isConn) { fill='#3d1530'; stroke='#e06b8b'; }
+    circle.setAttribute('fill',fill);
+    circle.setAttribute('stroke',stroke);
+    circle.setAttribute('stroke-width', isHl ? 2.5 : 1.5);
+    g.appendChild(circle);
+
+    const initials = p.replace("'","").split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x',nd.x); txt.setAttribute('y',nd.y+4);
+    txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('font-size','8');
+    txt.setAttribute('font-weight','600');
+    txt.setAttribute('fill', isHl ? '#d4c8ff' : '#3ecf8e');
+    txt.setAttribute('font-family','Arial');
+    txt.textContent = initials;
+    g.appendChild(txt);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',nd.x); label.setAttribute('y',nd.y+25);
+    label.setAttribute('text-anchor','middle');
+    label.setAttribute('font-size','9');
+    label.setAttribute('fill', isHl ? '#c4b8ff' : '#aaa');
+    label.setAttribute('font-weight', isHl ? '600' : '400');
+    label.setAttribute('font-family','Arial');
+    label.textContent = p;
+    g.appendChild(label);
+
+    g.addEventListener('mousedown', e => {
+      dragging = p;
+      const pt = svgPoint(e);
+      dragSVGX = pt.x - nd.x;
+      dragSVGY = pt.y - nd.y;
+      e.stopPropagation();
+      e.preventDefault();
+    });
+    g.addEventListener('click', e => {
+      if (e.detail === 1) {
+        setTimeout(() => {
+          highlighted = highlighted===p ? null : p;
+          showInfo(highlighted);
+          render();
+        }, 50);
+      }
+    });
+    nodeG.appendChild(g);
+  });
+}
+
+function svgPoint(e) {
+  const rect = svgEl.getBoundingClientRect();
+  const {W,H} = getSVGSize();
+  return {
+    x: (e.clientX - rect.left) * (W / rect.width),
+    y: (e.clientY - rect.top) * (H / rect.height)
+  };
+}
+
+svgEl.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const {W,H} = getSVGSize();
+  const pt = svgPoint(e);
+  nodes[dragging].x = Math.max(15, Math.min(W-15, pt.x - dragSVGX));
+  nodes[dragging].y = Math.max(15, Math.min(H-30, pt.y - dragSVGY));
+  render();
+});
+svgEl.addEventListener('mouseup', () => { dragging = null; });
+svgEl.addEventListener('mouseleave', () => { dragging = null; });
+
+function showInfo(name) {
+  const panel = document.getElementById('info-panel');
+  if (!name) { panel.style.display='none'; return; }
+  const conns = getConnections(name);
+  const grouped = {};
+  conns.forEach(c => { if (!grouped[c.type]) grouped[c.type]=[]; grouped[c.type].push(c.other); });
+  let html = `<h3>${name}</h3>`;
+  ['Married','Dating','Sexual','Parent','Sibling','Aunt'].forEach(t => {
+    if (grouped[t]) html += `<div class="info-rel" style="color:${typeColors[t]}"><span>${t}:</span> ${grouped[t].join(', ')}</div>`;
+  });
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+}
+
+function toggleType(type, el) {
+  if (activeTypes.has(type)) { activeTypes.delete(type); el.classList.add('off'); }
+  else { activeTypes.add(type); el.classList.remove('off'); }
+  render();
+}
+
+function doSearch(val) {
+  const v = val.trim().toLowerCase();
+  highlighted = v ? (people.find(p=>p.toLowerCase().startsWith(v))||null) : null;
+  showInfo(highlighted);
+  render();
+}
+
+window.addEventListener('resize', () => { initNodes(); render(); });
+
+setTimeout(() => { initNodes(); render(); }, 100);
+</script>
+</body>
+</html>
